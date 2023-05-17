@@ -7,8 +7,12 @@
 //
 
 import UIKit
+import StoreKit
 
-class QuoteTableViewController: UITableViewController {
+class QuoteTableViewController: UITableViewController, SKPaymentTransactionObserver {
+ 
+    
+    let productId = "io.kwebdev.InspoQuotes.PremiumQuotes"
     
     var quotesToShow = [
         "Our greatest glory is not in never falling, but in rising every time we fall. — Confucius",
@@ -30,88 +34,171 @@ class QuoteTableViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        print("Debugger is running...")
 
-        // Uncomment the following line to preserve selection between presentations
-        // self.clearsSelectionOnViewWillAppear = false
-
-        // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
-        // self.navigationItem.rightBarButtonItem = self.editButtonItem
+        // set this ViewController as the delegate to run the SKPaymentQueue (In-App Purchase) methods
+        SKPaymentQueue.default().add(self)
+        
+        if hasPurchased() {
+            showPremiumQuotes()
+        }
+        
+    
     }
 
     // MARK: - Table view data source
 
-    override func numberOfSections(in tableView: UITableView) -> Int {
-        // #warning Incomplete implementation, return the number of sections
-        return 0
-    }
-
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        // #warning Incomplete implementation, return the number of rows
-        return 0
+        // return the number of rows
+        
+        if hasPurchased() {
+            return quotesToShow.count
+        } else {
+            // the + 1 is our last cell that is a button that says "Buy More Quotes"
+            return quotesToShow.count + 1
+        }
     }
 
-    /*
+    
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "reuseIdentifier", for: indexPath)
-
-        // Configure the cell...
-
+        let cell = tableView.dequeueReusableCell(withIdentifier: "QuoteCell", for: indexPath)
+        
+        if indexPath.row < quotesToShow.count {
+            cell.textLabel?.text = quotesToShow[indexPath.row]
+            cell.textLabel?.numberOfLines = 0
+            cell.textLabel?.textColor = UIColor.white
+            cell.accessoryType = .none
+        } else {
+            // last cell is for buy quotes button for in-app purchase
+            cell.textLabel?.text = "Buy More Quotes"
+            cell.textLabel?.textColor = UIColor(hex: "#38b5a4ff")
+                cell.accessoryType = .disclosureIndicator
+        }
+        
         return cell
     }
-    */
-
-    /*
-    // Override to support conditional editing of the table view.
-    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
-        // Return false if you do not want the specified item to be editable.
-        return true
+    
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        if indexPath.row == quotesToShow.count {
+           buyPremiumQuotes()
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
     }
-    */
-
-    /*
-    // Override to support editing the table view.
-    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCellEditingStyle, forRowAt indexPath: IndexPath) {
-        if editingStyle == .delete {
-            // Delete the row from the data source
-            tableView.deleteRows(at: [indexPath], with: .fade)
-        } else if editingStyle == .insert {
-            // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view
-        }    
+        
+        
+// MARK: - In-App Purchase Methods
+    
+    func buyPremiumQuotes() {
+        
+        // check is user authorized to make purchase
+        if SKPaymentQueue.canMakePayments() {
+            
+            let paymentRequest = SKMutablePayment()
+            paymentRequest.productIdentifier = productId
+            SKPaymentQueue.default().add(paymentRequest)
+            
+        } else {
+            print("User is not authorized to make in-app purchases.")
+        }
     }
-    */
+    
+    // gets called every time the transaction status is updated
+    func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
+        
+        for transaction in transactions {
+            if transaction.transactionState == .purchased {
+                // User payment successful or already purchased
+                print("Transaction success!")
+                
+                showPremiumQuotes()
+                SKPaymentQueue.default().finishTransaction(transaction)
 
-    /*
-    // Override to support rearranging the table view.
-    override func tableView(_ tableView: UITableView, moveRowAt fromIndexPath: IndexPath, to: IndexPath) {
+                
+            } else if transaction.transactionState == .failed {
+                // User payment failed
+                print("Transaction failed!")
+                
+                if let error = transaction.error {
+                    let errorDescription = error.localizedDescription
+                    print("Transaction failed! Error: \(errorDescription)")
+                }
+                SKPaymentQueue.default().finishTransaction(transaction)
 
+
+            } else if transaction.transactionState == .restored {
+                showPremiumQuotes()
+                print("Transaction restored!")
+                // hide Restore button
+                navigationItem.setRightBarButton(nil, animated: true)
+                SKPaymentQueue.default().finishTransaction(transaction)
+
+            }
+            
+
+        }
     }
-    */
-
-    /*
-    // Override to support conditional rearranging of the table view.
-    override func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
-        // Return false if you do not want the item to be re-orderable.
-        return true
-    }
-    */
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
-    }
-    */
     
     
+    func showPremiumQuotes() {
+        // add key if user purchased app that can be checked with hasPurchased()
+        UserDefaults.standard.set(true, forKey: productId)
+        
+        quotesToShow.append(contentsOf: premiumQuotes)
+        
+        tableView.reloadData()
+    }
     
-    
-    
+    func hasPurchased() -> Bool {
+        let purchaseStatus = UserDefaults.standard.bool(forKey: productId)
+        
+        if purchaseStatus {
+            print("Already purchased app!")
+            return true
+        } else {
+            print("Never purchased app!")
+            return false
+        }
+    }
+        
+        
+        
+        
     @IBAction func restorePressed(_ sender: UIBarButtonItem) {
+        // checks app user's Apple ID in Apple servers to see if they have purchased this app
+        // if yes, restore the purchase
+        SKPaymentQueue.default().restoreCompletedTransactions()
         
     }
 
 
 }
+    
+// MARK: - Hex color
+
+    extension UIColor {
+        public convenience init?(hex: String) {
+            let r, g, b, a: CGFloat
+
+            if hex.hasPrefix("#") {
+                let start = hex.index(hex.startIndex, offsetBy: 1)
+                let hexColor = String(hex[start...])
+
+                if hexColor.count == 8 {
+                    let scanner = Scanner(string: hexColor)
+                    var hexNumber: UInt64 = 0
+
+                    if scanner.scanHexInt64(&hexNumber) {
+                        r = CGFloat((hexNumber & 0xff000000) >> 24) / 255
+                        g = CGFloat((hexNumber & 0x00ff0000) >> 16) / 255
+                        b = CGFloat((hexNumber & 0x0000ff00) >> 8) / 255
+                        a = CGFloat(hexNumber & 0x000000ff) / 255
+
+                        self.init(red: r, green: g, blue: b, alpha: a)
+                        return
+                    }
+                }
+            }
+
+            return nil
+        }
+    }
